@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChefAI Smart</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    max-width: 900px;
+    margin: 40px auto;
+    background: #fff7f0;
+}
+
+h1 {
+    text-align: center;
+    color: #d35400;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+textarea {
+    width: 100%;
+    height: 80px;
+    padding: 10px;
+    font-size: 14px;
+}
+
+button {
+    padding: 10px 15px;
+    margin-top: 10px;
+    background: #e67e22;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #ca6f1e;
+}
+
+#result {
+    white-space: pre-wrap;
+    line-height: 1.6;
+}
+
+.status {
+    font-size: 13px;
+    margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<h1>👩🏻‍🍳 ChefAI Smart</h1>
+
+<div class="card">
+    <h3>🥕 Nhập nguyên liệu (cách nhau bằng dấu phẩy)</h3>
+    <textarea id="ingredients" placeholder="Ví dụ: trứng, cà chua, hành, trứng"></textarea>
+    <button onclick="suggestDish()">Gợi Ý Món</button>
+</div>
+
+<div class="card">
+    <h3>🍲 Nhập tên món để xem cách nấu</h3>
+    <textarea id="dishName" placeholder="Ví dụ: mì xào bò"></textarea>
+    <button onclick="cookDish()">Nấu Món</button>
+</div>
+
+<div class="card">
+    <h3>🍽️ Kết quả</h3>
+    <div id="result"></div>
+    <div class="status" id="status"></div>
+</div>
+
+<script>
+const API_KEY = "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";
+const MODEL = "llama-3.1-8b-instant";
+let previousSuggestions = [];
+
+function cleanIngredients(input) {
+    const items = input.split(",")
+        .map(i => i.trim().toLowerCase())
+        .filter(i => i !== "");
+    return [...new Set(items)];
+}
+
+async function callAI(promptText) {
+    const status = document.getElementById("status");
+    status.innerText = "⏳ Đang gọi AI...";
+
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify({
+                model: MODEL,
+                messages: [
+                    {
+                        role: "system",
+                        content: `
+Bạn là đầu bếp chuyên nghiệp và logic.
+- Không gợi ý món trùng lặp.
+- Nếu thiếu nguyên liệu quan trọng, đề xuất bổ sung.
+- Trả lời rõ ràng, có cấu trúc.
+`
+                    },
+                    {
+                        role: "user",
+                        content: promptText
+                    }
+                ],
+                temperature: 0.6
+            })
+        });
+
+        const text = await response.text();
+
+        if (!response.ok) {
+            throw new Error(text);
+        }
+
+        const data = JSON.parse(text);
+        status.innerText = "✅ AI đã trả lời";
+        return data.choices[0].message.content;
+
+    } catch (error) {
+        status.innerText = "❌ Lỗi xảy ra";
+        return "Chi tiết lỗi:\n" + error.message;
+    }
+}
+
+async function suggestDish() {
+    const raw = document.getElementById("ingredients").value;
+    const cleaned = cleanIngredients(raw);
+
+    if (cleaned.length === 0) {
+        alert("Vui lòng nhập nguyên liệu.");
+        return;
+    }
+
+    const prompt = `
+Tôi có các nguyên liệu: ${cleaned.join(", ")}.
+
+Hãy:
+1. Gợi ý 3 món ăn KHÔNG trùng với: ${previousSuggestions.join(", ")}
+2. Nếu thiếu nguyên liệu chính, ghi rõ cần thêm gì.
+3. Mỗi món gồm:
+   - Tên món
+   - Lý do phù hợp
+   - Độ khó
+`;
+
+    const result = await callAI(prompt);
+    document.getElementById("result").innerText = result;
+    previousSuggestions.push(result);
+}
+
+async function cookDish() {
+    const dish = document.getElementById("dishName").value.trim();
+
+    if (!dish) {
+        alert("Vui lòng nhập tên món.");
+        return;
+    }
+
+    const prompt = `
+Hãy hướng dẫn nấu món ${dish} gồm:
+- Nguyên liệu đầy đủ
+- Các bước chi tiết (đánh số)
+- Thời gian nấu
+- Mẹo làm ngon hơn
+
+Nếu món không tồn tại, hãy nói rõ.
+`;
+
+    const result = await callAI(prompt);
+    document.getElementById("result").innerText = result;
+}
+</script>
+
+</body>
+</html>
